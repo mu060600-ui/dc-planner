@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>데이터센터 설계해 보기 | AI KOREA</title>
+<meta name="description" content="용도와 규모, 서버, 냉각 방식, 전력 인입을 고르면 랙 수, 전력, 냉각 설비, 변전소와 부지, 3D 배치, 개략 자재 목록까지 바로 보여 주는 AI KOREA 데이터센터 개략 설계 도구">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<meta name="theme-color" content="#1f6fe5">
+<meta property="og:type" content="website">
+<meta property="og:title" content="데이터센터 설계해 보기 | AI KOREA">
+<meta property="og:description" content="다섯 가지만 고르면 랙 수, 전력, 냉각 설비, 변전소와 부지, 3D 배치까지 바로 계산해 보여 주는 개략 설계 도구">
+<meta property="og:image" content="https://mu060600-ui.github.io/dc-planner/assets/og.png">
+<meta property="og:url" content="https://mu060600-ui.github.io/dc-planner/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<link rel="stylesheet" href="css/planner.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="./"><img src="assets/aikorea-logo.png" alt="AI KOREA"><span>데이터센터 설계해 보기</span></a>
+  <a class="btn primary" id="cta-top" target="_blank" rel="noopener">구축 상담하기</a>
+</header>
+
+<section class="hero">
+  <p class="eyebrow">AI KOREA · DATA CENTER PLANNER</p>
+  <h1>부지를 찍고 다섯 가지만 고르면<br>데이터센터의 윤곽이 보입니다</h1>
+  <p class="lead">지도에서 가까운 변전소를 확인하고 용도, 규모, 서버, 냉각 방식, 전력 인입을 고르세요. 필요한 랙 수와 전력, 냉각 설비, 변전소와 부지 크기, 3D 배치, 개략 자재 목록을 바로 계산해 보여 드립니다.</p>
+  <p class="disclaimer">교육·상담용 개략 추정입니다. 실제 설계, 해석, 견적을 대체하지 않습니다.</p>
+</section>
+
+<section class="wrap single finder">
+  <div class="card">
+    <div class="row-h"><h2 class="plain">부지 찾기 · 국내 변전소 지도</h2><div class="legend" id="legend"></div></div>
+    <div class="finder-grid">
+      <div><div id="map"></div><div class="presets" id="regions"></div></div>
+      <div class="finder-side" id="finder-side"><p class="finder-empty">지도에서 데이터센터를 지을 곳을 눌러 보세요. 가까운 변전소와 거리를 알려 드립니다.</p></div>
+    </div>
+    <p class="hint" id="map-note"></p>
+  </div>
+</section>
+
+<main class="wrap">
+  <div class="steps">
+    <section class="card"><h2><i>1</i>무슨 일을 하는 데이터센터인가요?</h2><div class="opts" id="o-workload"></div></section>
+    <section class="card"><h2><i>2</i>얼마나 큰 규모인가요?</h2>
+      <div class="field"><label>IT 전력 규모 <b id="v-it"></b></label><input type="range" id="s-it" min="0" max="1000" step="1"><div class="presets" id="o-it"></div><p class="hint">서버와 통신 장비가 쓰는 전기의 합입니다.</p></div>
+      <div class="field"><label>랙당 전력 밀도 <b id="v-den"></b></label><input type="range" id="s-den" min="4" max="140" step="1"><p class="hint">랙 한 대에 들어가는 서버들이 쓰는 전기입니다. 높을수록 좁은 곳에 많이 넣지만 식히기 어려워집니다.</p></div>
+    </section>
+    <section class="card"><h2><i>3</i>어떤 서버를 넣을까요?</h2><div class="opts list" id="o-server"></div><p class="hint">사양은 Supermicro 공식 홈페이지에서 2026-11-25에 확인한 내용입니다.</p></section>
+    <section class="card"><h2><i>4</i>어떻게 식힐까요?</h2>
+      <h3>서버를 식히는 방식</h3><div class="opts" id="o-cooling"></div>
+      <h3>열을 건물 밖으로 내보내는 방식</h3><div class="opts" id="o-reject"></div>
+      <h3>고장에 대비한 예비 설비</h3><div class="opts" id="o-redundancy"></div>
+    </section>
+    <section class="card"><h2><i>5</i>전기는 어떻게 받고, 부지는 얼마나 필요할까요?</h2>
+      <h3>수전 전압 (전기를 받는 전압)</h3><div class="opts" id="o-voltage"></div>
+      <h3>부지 여유</h3><div class="opts" id="o-expansion"></div>
+      <p class="hint">데이터센터는 전기를 얼마나, 언제 받을 수 있는지가 부지 선정의 첫 조건입니다. 실제 수전 방식은 한전과 협의해 정합니다.</p>
+    </section>
+  </div>
+
+  <aside class="side">
+    <div class="viewer card">
+      <div class="views" id="views"></div>
+      <div id="view3d"></div>
+      <div class="modes" id="modes"></div>
+      <p class="vnote" id="vnote"></p>
+    </div>
+    <div class="card"><h2 class="plain">한눈에 보기</h2><div class="kpis" id="kpis"></div></div>
+    <div class="card" id="checks"></div>
+  </aside>
+</main>
+
+<section class="wrap single">
+  <div class="card">
+    <div class="row-h"><h2 class="plain">개략 자재 목록</h2><div class="acts"><button class="btn" id="b-copy">구성 요약 복사</button><button class="btn" id="b-csv">엑셀로 저장 (CSV)</button></div></div>
+    <div class="tbl-wrap"><table class="tbl" id="bom"></table></div>
+    <p class="hint">수량만 보여 드립니다. 가격과 정확한 규격은 현장 조건을 반영한 상세 설계와 견적에서 정해집니다.</p>
+  </div>
+  <details class="card"><summary>계산 가정 보기</summary><div class="tbl-wrap"><table class="tbl" id="assume"></table></div><p class="hint">위 단위 용량과 계수는 제조사 사양이 아니라 계산을 위한 가상 값입니다.</p></details>
+  <div class="card cta">
+    <div><h2 class="plain">이 구성, 실제로 지으려면 무엇이 필요할까요?</h2><p>AI KOREA는 데이터센터 인프라 설계부터 기계설비 시공, 냉각수 배관, 설치·시운전, 유지보수까지 맡는 EPC 파트너입니다. 위 구성 요약을 복사해 문의에 붙여 주시면 상담이 빨라집니다.</p></div>
+    <a class="btn primary big" id="cta-bottom" target="_blank" rel="noopener">AI KOREA에 구축 상담하기</a>
+  </div>
+</section>
+
+<footer class="foot">
+  <p>© AI KOREA Co., Ltd. · Beyond the Best, To be the Only ONE</p>
+  <p>모든 3D 모델과 수치는 교육용 개념 표현입니다. Supermicro, NVIDIA 등 제품명과 상표는 각 회사의 자산입니다.</p>
+</footer>
+<div id="toast" class="toast"></div>
+<script type="module" src="js/planner.js"></script>
+</body>
+</html>

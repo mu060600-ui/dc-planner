@@ -93,3 +93,36 @@ html, body { height: 100%; } body { display: flex; flex-direction: column; overf
 .land.good { background: #e9f7f0; color: #0d6b43; } .land.warn { background: #fff6e0; color: #8a5a00; } .land.bad { background: #fdecec; color: #a11f1f; } .land.none { background: var(--bg); color: var(--sub); }
 .finder-side { max-height: clamp(300px, calc(100vh - 380px), 620px); overflow-y: auto; padding-right: 4px; }
 @media (max-width: 900px) { .finder-side { max-height: none; } }
+
+/* ===== 2026-11-26 확장: 넓은 화면, 큰 3D, 숫자 입력, 단계 안 다음 버튼 ===== */
+body { font-size: 16.5px; }
+.panel.wide, .split { max-width: min(1760px, 97vw); }
+.split { grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.28fr); gap: 22px; }
+.card { padding: 22px; border-radius: 18px; } .card h2 { font-size: 18.5px; margin-bottom: 14px; }
+.opt { padding: 14px 16px; } .opt b { font-size: 16px; } .opt span { font-size: 13.5px; }
+.panel-head h1 { font-size: clamp(25px, 2.5vw, 34px); } .panel-head .lead { font-size: 15.5px; }
+.hint { font-size: 13.5px; } .kpi b { font-size: 21px; } .kpi span { font-size: 13px; }
+#view3d { height: clamp(360px, 56vh, 820px); }
+#map { height: clamp(340px, calc(100vh - 330px), 900px); } .finder-side { max-height: clamp(340px, calc(100vh - 330px), 900px); }
+.field label b { font-size: 22px; }
+.numrow { display: flex; align-items: center; gap: 8px; margin: 8px 0 2px; }
+.numrow input[type=number] { font: inherit; font-size: 18px; font-weight: 700; width: 150px; padding: 9px 12px; border: 1.5px solid var(--line); border-radius: 10px; color: var(--ink); background: #fff; }
+.numrow input[type=number]:focus, .numrow select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(31, 111, 229, .14); }
+.numrow select { font: inherit; font-size: 16px; font-weight: 600; padding: 9px 10px; border: 1.5px solid var(--line); border-radius: 10px; background: #fff; }
+.numrow em { font-style: normal; font-weight: 600; color: var(--ink); } .numrow span { font-size: 12.5px; color: var(--sub); }
+/* 입력 칸 바로 아래의 이전·다음 */
+.stepnav { display: flex; justify-content: space-between; gap: 12px; margin-top: 16px; }
+.stepnav .btn { padding: 15px 26px; font-size: 16.5px; border-radius: 12px; } .stepnav .btn.primary { flex: 1; max-width: 420px; margin-left: auto; text-align: center; box-shadow: 0 8px 20px rgba(31, 111, 229, .28); }
+.navbar { justify-content: center; padding: 8px 20px; box-shadow: none; } .nav-mid b { display: inline; margin-right: 10px; } .nav-mid span { display: inline; }
+/* 3D 크게 보기 */
+.expand { position: absolute; z-index: 3; top: 10px; right: 10px; font: inherit; font-size: 13px; font-weight: 600; padding: 7px 13px; border-radius: 99px; border: 1px solid var(--line); background: rgba(255, 255, 255, .92); cursor: pointer; box-shadow: 0 4px 14px rgba(15, 28, 46, .12); }
+.expand:hover { border-color: var(--blue); color: var(--blue); }
+.viewer.max { position: fixed; inset: 10px; z-index: 80; margin: 0; display: flex; flex-direction: column; box-shadow: 0 30px 80px rgba(15, 28, 46, .35); }
+.viewer.max #view3d { flex: 1; height: auto; min-height: 0; }
+/* 열화상 범례, 통로 범례 */
+.thermal, .aislekey { position: absolute; z-index: 3; left: 12px; bottom: 92px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: rgba(10, 6, 22, .78); color: #fff; font-size: 12px; padding: 7px 12px; border-radius: 12px; pointer-events: none; }
+.thermal i { width: 150px; height: 10px; border-radius: 6px; background: linear-gradient(90deg, #08002a, #5c0094, #db145c, #ff7a0a, #ffe140, #fffff5); }
+.thermal em { font-style: normal; opacity: .75; width: 100%; }
+.aislekey { background: rgba(255, 255, 255, .92); color: var(--ink); border: 1px solid var(--line); } .aislekey .c { color: #1f6fe5; } .aislekey .h { color: #e0431c; }
+.hidden { display: none !important; }
+@media (max-width: 900px) { .split { grid-template-columns: 1fr; } #view3d { height: 40vh; } .stepnav .btn.primary { max-width: none; } .numrow input[type=number] { width: 120px; } .thermal, .aislekey { bottom: 110px; } }

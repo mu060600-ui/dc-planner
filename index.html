@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>데이터센터 설계해 보기 | AI KOREA</title>
+<title>데이터센터 구축 시뮬레이터 | AI KOREA</title>
 <meta name="description" content="용도와 규모, 서버, 냉각 방식, 전력 인입을 고르면 랙 수, 전력, 냉각 설비, 변전소와 부지, 3D 배치, 개략 자재 목록까지 바로 보여 주는 AI KOREA 데이터센터 개략 설계 도구">
 <link rel="icon" type="image/png" href="assets/favicon.png">
 <meta name="theme-color" content="#1f6fe5">
 <meta property="og:type" content="website">
-<meta property="og:title" content="데이터센터 설계해 보기 | AI KOREA">
-<meta property="og:description" content="다섯 가지만 고르면 랙 수, 전력, 냉각 설비, 변전소와 부지, 3D 배치까지 바로 계산해 보여 주는 개략 설계 도구">
+<meta property="og:title" content="데이터센터 구축 시뮬레이터 | AI KOREA">
+<meta property="og:description" content="부지와 다섯 가지 선택만으로 랙 수, 전력, 냉각 설비, 변전소와 부지, 3D 배치까지 바로 보여 주는 구축 시뮬레이터">
 <meta property="og:image" content="https://mu060600-ui.github.io/dc-planner/assets/og.png">
 <meta property="og:url" content="https://mu060600-ui.github.io/dc-planner/">
 <meta name="twitter:card" content="summary_large_image">
@@ -20,7 +20,7 @@
 </head>
 <body>
 <header class="top">
-  <a class="brand" href="./"><img src="assets/aikorea-logo.png" alt="AI KOREA"><span>데이터센터 설계해 보기</span></a>
+  <a class="brand" href="./"><img src="assets/aikorea-logo.png" alt="AI KOREA"><span>데이터센터 구축 시뮬레이터</span></a>
   <nav class="stepper" id="stepper" aria-label="진행 단계"></nav>
   <a class="btn primary" id="cta-top" target="_blank" rel="noopener">구축 상담하기</a>
 </header>
@@ -37,7 +37,9 @@
       </div>
       <p class="hint" id="map-note"></p>
     </div>
-  </section>
+  
+        <div class="stepnav"><button class="btn" data-nav="prev">← 이전</button><button class="btn primary" data-nav="next"></button></div>
+      </section>
 
   <!-- 02 ~ 06: 왼쪽은 그 단계의 선택, 오른쪽은 3D 와 계산 결과 -->
   <div class="split" id="split">
@@ -46,25 +48,34 @@
         <div class="panel-head"><p class="eyebrow">02 · 용도와 규모</p><h1>무슨 일을, 얼마나 크게 할까요?</h1></div>
         <div class="card"><h2>무슨 일을 하는 데이터센터인가요?</h2><div class="opts" id="o-workload"></div></div>
         <div class="card"><h2>얼마나 큰 규모인가요?</h2>
-          <div class="field"><label>IT 전력 규모 <b id="v-it"></b></label><input type="range" id="s-it" min="0" max="1000" step="1"><div class="presets" id="o-it"></div><p class="hint">서버와 통신 장비가 쓰는 전기의 합입니다.</p></div>
-          <div class="field"><label>랙당 전력 밀도 <b id="v-den"></b></label><input type="range" id="s-den" min="4" max="140" step="1"><p class="hint">랙 한 대에 들어가는 서버들이 쓰는 전기입니다. 높을수록 좁은 곳에 많이 넣지만 식히기 어려워집니다.</p></div>
+          <div class="field"><label>IT 전력 규모 <b id="v-it"></b></label><div class="numrow"><input type="number" id="n-it" min="0.05" step="any" inputmode="decimal" aria-label="IT 전력 규모 직접 입력"><select id="u-it" aria-label="단위"><option value="1000">MW</option><option value="1">kW</option></select><span>직접 입력</span></div><input type="range" id="s-it" min="0" max="1000" step="1"><div class="presets" id="o-it"></div><p class="hint">서버와 통신 장비가 쓰는 전기의 합입니다.</p></div>
+          <div class="field"><label>랙당 전력 밀도 <b id="v-den"></b></label><div class="numrow"><input type="number" id="n-den" min="1" max="300" step="any" inputmode="decimal" aria-label="랙당 전력 밀도 직접 입력"><em>kW / 랙</em><span>직접 입력</span></div><input type="range" id="s-den" min="4" max="140" step="1"><p class="hint">랙 한 대에 들어가는 서버들이 쓰는 전기입니다. 높을수록 좁은 곳에 많이 넣지만 식히기 어려워집니다.</p></div>
         </div>
+      
+        <div class="stepnav"><button class="btn" data-nav="prev">← 이전</button><button class="btn primary" data-nav="next"></button></div>
       </section>
       <section class="panel" data-step="3">
         <div class="panel-head"><p class="eyebrow">03 · 서버</p><h1>어떤 서버를 넣을까요?</h1></div>
         <div class="card"><div class="opts list" id="o-server"></div><p class="hint">사양은 Supermicro 공식 홈페이지에서 2026-11-25에 확인한 내용입니다.</p></div>
+      
+        <div class="stepnav"><button class="btn" data-nav="prev">← 이전</button><button class="btn primary" data-nav="next"></button></div>
       </section>
       <section class="panel" data-step="4">
         <div class="panel-head"><p class="eyebrow">04 · 냉각</p><h1>어떻게 식힐까요?</h1><p class="lead">오른쪽 "서버실 안"에서 공기 흐름과 냉각수 버튼을 눌러 비교해 보세요.</p></div>
         <div class="card"><h2>서버를 식히는 방식</h2><div class="opts" id="o-cooling"></div></div>
+        <div class="card"><h2>통로 구성 (랙을 어떻게 마주 보게 놓을까요?)</h2><div class="opts" id="o-contain"></div><p class="hint">고르면 오른쪽 "서버실 안"의 랙 방향과 공기 흐름, 열 분포가 함께 바뀝니다.</p></div>
         <div class="card"><h2>열을 건물 밖으로 내보내는 방식</h2><div class="opts" id="o-reject"></div></div>
         <div class="card"><h2>고장에 대비한 예비 설비</h2><div class="opts" id="o-redundancy"></div></div>
+      
+        <div class="stepnav"><button class="btn" data-nav="prev">← 이전</button><button class="btn primary" data-nav="next"></button></div>
       </section>
       <section class="panel" data-step="5">
         <div class="panel-head"><p class="eyebrow">05 · 전력 인입과 부지</p><h1>전기는 어떻게 받고, 땅은 얼마나 필요할까요?</h1></div>
         <div class="card"><h2>수전 전압 (전기를 받는 전압)</h2><div class="opts" id="o-voltage"></div></div>
         <div class="card"><h2>부지 여유</h2><div class="opts" id="o-expansion"></div><p class="hint">데이터센터는 전기를 얼마나, 언제 받을 수 있는지가 부지 선정의 첫 조건입니다. 실제 수전 방식은 한전과 협의해 정합니다.</p></div>
         <div class="card" id="site-recap"></div>
+      
+        <div class="stepnav"><button class="btn" data-nav="prev">← 이전</button><button class="btn primary" data-nav="next"></button></div>
       </section>
       <section class="panel" data-step="6">
         <div class="panel-head"><p class="eyebrow">06 · 결과</p><h1>이런 데이터센터가 됩니다</h1><p class="lead">교육·상담용 개략 추정입니다. 실제 설계, 해석, 견적을 대체하지 않습니다.</p></div>
@@ -78,12 +89,17 @@
           <div><h2 class="plain">이 구성, 실제로 지으려면 무엇이 필요할까요?</h2><p>AI KOREA는 데이터센터 인프라 설계부터 기계설비 시공, 냉각수 배관, 설치·시운전, 유지보수까지 맡는 EPC 파트너입니다. 구성 요약을 복사해 문의에 붙여 주시면 상담이 빨라집니다.</p></div>
           <a class="btn primary big" id="cta-bottom" target="_blank" rel="noopener">AI KOREA에 구축 상담하기</a>
         </div>
+      
+        <div class="stepnav"><button class="btn" data-nav="prev">← 이전</button><button class="btn primary" data-nav="next"></button></div>
       </section>
     </div>
     <aside class="side">
       <div class="viewer card">
         <div class="views" id="views"></div>
+        <button class="expand" id="b-expand" title="3D 화면 크게 보기">⛶ 크게 보기</button>
         <div id="view3d"></div>
+        <div class="thermal hidden" id="thermal"><span>낮음 약 18℃</span><i></i><span>높음 약 45℃</span><em>열화상 표현 (교육용, 실제 해석 아님)</em></div>
+        <div class="aislekey hidden" id="aislekey"><b class="c">■ 찬 공기 · 찬 통로</b><b class="h">■ 더운 공기 · 더운 통로</b></div>
         <div class="modes" id="modes"></div>
         <p class="vnote" id="vnote"></p>
       </div>
@@ -93,11 +109,7 @@
   </div>
 </main>
 
-<footer class="navbar">
-  <button class="btn" id="b-prev">← 이전</button>
-  <div class="nav-mid"><b id="nav-title"></b><span id="nav-hint"></span></div>
-  <button class="btn primary" id="b-next"></button>
-</footer>
+<footer class="navbar"><div class="nav-mid"><b id="nav-title"></b><span id="nav-hint"></span></div></footer>
 <div id="toast" class="toast"></div>
 <script type="module" src="js/planner.js"></script>
 </body>

@@ -204,9 +204,9 @@ export function buildExtras(world, level, kit) {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshStandardMaterial({ color: z.color || 0x9fb3c8, roughness: 0.85, metalness: 0.05, transparent: true, opacity: z.opacity ?? 0.55 }));
     m.rotation.x = -Math.PI / 2; m.position.set((x0 + x1) / 2, 0.012, (z0 + z1) / 2); m.receiveShadow = true; m.userData.sys = 'room'; root.add(m);
     const name = z.name ? (z.name[world.lang] ?? z.name.ko) : ''; if (!name) continue;
-    const tex = canvasTex(512, 96, (g) => { g.font = '700 50px Pretendard, "Malgun Gothic", sans-serif'; g.fillStyle = 'rgba(13,27,46,.8)'; g.textBaseline = 'middle'; g.fillText(name, 10, 50); });
-    const lw = Math.min(w - 0.6, 6); const lab = new THREE.Mesh(new THREE.PlaneGeometry(lw, lw * 96 / 512), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
-    lab.rotation.x = -Math.PI / 2; lab.position.set(x0 + 0.4 + lw / 2, 0.02, z0 + 0.7); lab.userData.sys = 'room'; root.add(lab);
+    const tex = canvasTex(512, 96, (g) => { g.font = '700 50px Pretendard, "Malgun Gothic", sans-serif'; g.fillStyle = z.textColor || 'rgba(13,27,46,.8)'; g.textBaseline = 'middle'; g.fillText(name, 10, 50); });
+    const lw = Math.min(w - 0.6, z.labelW || 6); const lab = new THREE.Mesh(new THREE.PlaneGeometry(lw, lw * 96 / 512), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
+    lab.rotation.x = -Math.PI / 2; lab.position.set(x0 + 0.4 + lw / 2, 0.02, d < 2.4 ? (z0 + z1) / 2 : z0 + 0.7); lab.userData.sys = 'room'; root.add(lab);
   }
   // 유리 칸막이 (문 자리는 선분을 나눠서 비워 둔다)
   for (const [x1, z1, x2, z2] of level.walls || []) {
@@ -262,10 +262,41 @@ export function buildExtras(world, level, kit) {
       list.forEach((r, i) => { MAT.makeTranslation(r.x, -0.05, r.z); im.setMatrixAt(i, MAT); }); root.add(im);
     }
   }
+  // ---- 전장 트레이(케이블 트레이)와 공조 덕트
+  // 구간(a→b)을 따라 놓이는 묶음. 묶음 안에서는 길이 방향이 z 축이다.
+  const seg = (a, b) => { const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b); const g = new THREE.Group(); g.position.copy(A).lerp(B, 0.5); g.lookAt(B); root.add(g); return [g, A.distanceTo(B)]; };
+  const railM = M(0x8d99a8, { metalness: 0.75, roughness: 0.35 }), fiberM = M(0xf2c230, { metalness: 0.1, roughness: 0.6 }), ductM = M(0xc3ccd4, { metalness: 0.8, roughness: 0.32 }), grilleM = M(0x2b3545, { metalness: 0.4, roughness: 0.6 });
+  const ceilY = level.room.h;
+  for (const t of level.trays || []) for (let i = 0; i < t.pts.length - 1; i++) {
+    const a = t.pts[i], b = t.pts[i + 1]; const [g, len] = seg(a, b); if (len < 0.05) continue;
+    const vertical = Math.abs(a[1] - b[1]) > 0.2;
+    if (t.kind === 'data') {
+      // 광케이블 덕트(노란색 트로프)
+      const m = box(0.2, 0.1, len, fiberM, 0, 0, 0, 'struct'); m.castShadow = false; g.add(m);
+    } else {
+      // 사다리형 전력 케이블 트레이: 양쪽 레일 + 가로대, 그 위에 케이블 다발
+      const w = t.w || 0.42;
+      for (const sx of [-1, 1]) { const r = box(0.03, 0.09, len, railM, sx * w / 2, 0, 0, 'struct'); r.castShadow = false; g.add(r); }
+      const n = Math.max(1, Math.floor(len / 0.3)); const rung = new THREE.InstancedMesh(new THREE.BoxGeometry(w, 0.02, 0.03), railM, n); rung.userData.sys = 'struct';
+      for (let k = 0; k < n; k++) { MAT.makeTranslation(0, -0.03, -len / 2 + (k + 0.5) * (len / n)); rung.setMatrixAt(k, MAT); } g.add(rung);
+      const cable = box(w * 0.62, 0.05, len, grilleM, 0, 0.0, 0, 'struct'); cable.castShadow = false; g.add(cable);
+    }
+    if (!vertical) for (let x = 1.0; x < len; x += 2.4) {        // 천장에서 내려오는 행거
+      const p = new THREE.Vector3(...a).lerp(new THREE.Vector3(...b), x / len); const hh = ceilY - p.y;
+      const rod = box(0.015, hh, 0.015, railM, p.x, p.y + hh / 2, p.z, 'struct'); rod.castShadow = false; root.add(rod);
+    }
+  }
+  for (const dct of level.ducts || []) for (let i = 0; i < dct.pts.length - 1; i++) {
+    const a = dct.pts[i], b = dct.pts[i + 1]; const [g, len] = seg(a, b); if (len < 0.05) continue;
+    const w = dct.w || 0.6, h = dct.h || 0.4;
+    const body = box(w, h, len, ductM, 0, 0, 0, 'struct'); g.add(body);
+    for (let z = -len / 2; z <= len / 2 + 0.01; z += 1.2) { const f = box(w + 0.06, h + 0.06, 0.03, railM, 0, 0, z, 'struct'); f.castShadow = false; g.add(f); }        // 이음 플랜지
+    if (Math.abs(a[1] - b[1]) < 0.2) for (let z = -len / 2 + 0.9; z < len / 2 - 0.3; z += 1.8) { const gr = box(w * 0.7, 0.02, 0.7, grilleM, 0, -h / 2 - 0.011, z, 'struct'); gr.castShadow = false; g.add(gr); }   // 흡입 그릴
+  }
   // 컨테인먼트(통로 밀폐): 반투명 지붕과 끝 문
   for (const c of level.contain || []) {
     const [x0, z0, x1, z1] = c.rect;
-    const roof = box(x1 - x0, 0.05, z1 - z0, new THREE.MeshStandardMaterial({ color: c.hot ? 0xffb199 : 0x9fd8ff, transparent: true, opacity: 0.3, depthWrite: false }), (x0 + x1) / 2, 2.24, (z0 + z1) / 2, 'room'); roof.castShadow = false; root.add(roof);
+    const roof = box(x1 - x0, 0.05, z1 - z0, new THREE.MeshStandardMaterial({ color: c.hot ? 0xffb199 : 0x9fd8ff, transparent: true, opacity: 0.3, depthWrite: false }), (x0 + x1) / 2, 2.24, (z0 + z1) / 2, 'cover'); roof.castShadow = false; root.add(roof);
   }
   // AMR (자율주행 물류 로봇): 정해진 길을 돈다
   for (const a of level.amrs || []) {

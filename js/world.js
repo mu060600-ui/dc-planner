@@ -5,6 +5,51 @@ import { installExt, buildExtras } from './world_ext.js';
 
 export const C = { cold: 0x39b6ff, hot: 0xff6a3d, power: 0xffd23d, supply: 0x2f8bff, ret: 0xff5252, brand: 0x1f6fe5 };
 
+/** 열화상 카메라처럼 보이는 재질. 위치마다 주변 열원·냉원(level.heat)의 영향을 섞어 온도를 정하고 색으로 바꾼다.
+ *  교육용 표현이며 실제 CFD 해석이 아니다. */
+function thermalMaterial(level) {
+  const zs = (level.heat || []).slice(0, 32), Z = [], T = [];
+  for (let i = 0; i < 32; i++) { const z = zs[i]; Z.push(z ? new THREE.Vector4(z.pos[0], z.pos[1], z.size[0] / 2, z.size[1] / 2) : new THREE.Vector4()); T.push(z ? z.t : 0); }
+  return new THREE.ShaderMaterial({
+    uniforms: { uZ: { value: Z }, uT: { value: T }, uN: { value: zs.length }, uAmb: { value: level.ambient ?? 0.24 } },
+    vertexShader: `
+      varying vec3 vW; varying vec3 vN;
+      void main() {
+        vec4 p = vec4(position, 1.0);
+        #ifdef USE_INSTANCING
+          p = instanceMatrix * p;
+        #endif
+        vec3 n = normal;
+        #ifdef USE_INSTANCING
+          n = mat3(instanceMatrix) * n;
+        #endif
+        vec4 w = modelMatrix * p; vW = w.xyz; vN = normalize(mat3(modelMatrix) * n);
+        gl_Position = projectionMatrix * viewMatrix * w;
+      }`,
+    fragmentShader: `
+      uniform vec4 uZ[32]; uniform float uT[32]; uniform int uN; uniform float uAmb; varying vec3 vW; varying vec3 vN;
+      vec3 ramp(float t) {
+        t = clamp(t, 0.0, 1.0) * 5.0;
+        vec3 c0 = vec3(0.03, 0.0, 0.16), c1 = vec3(0.36, 0.0, 0.58), c2 = vec3(0.86, 0.08, 0.36), c3 = vec3(1.0, 0.48, 0.04), c4 = vec3(1.0, 0.88, 0.25), c5 = vec3(1.0, 1.0, 0.96);
+        if (t < 1.0) return mix(c0, c1, t); if (t < 2.0) return mix(c1, c2, t - 1.0); if (t < 3.0) return mix(c2, c3, t - 2.0); if (t < 4.0) return mix(c3, c4, t - 3.0); return mix(c4, c5, t - 4.0);
+      }
+      void main() {
+        float acc = 0.0, wsum = 0.0;
+        for (int i = 0; i < 32; i++) {
+          if (i >= uN) break;
+          vec2 d = abs(vW.xz - uZ[i].xy) - uZ[i].zw; float dist = length(max(d, 0.0));
+          float w = exp(-dist * dist * 1.5); acc += uT[i] * w; wsum += w;
+        }
+        float T = mix(uAmb, acc / max(wsum, 0.0001), clamp(wsum, 0.0, 1.0));
+        T += vW.y * 0.022 * smoothstep(0.35, 0.8, T);            // 더운 공기는 위로 올라간다
+        if (vW.y < 0.06) T = T * 0.72 + 0.03;                    // 바닥은 설비보다 차갑게 보인다
+        // 열화상 카메라처럼 면의 방향에 따라 밝기가 달라져 설비 윤곽이 드러난다
+        float shade = 0.62 + 0.38 * abs(dot(vN, normalize(vec3(0.45, 0.8, 0.4))));
+        gl_FragColor = vec4(ramp(T) * shade, 1.0);
+      }`,
+  });
+}
+
 /** 직각으로 꺾이는 경로. 실제 배관처럼 곧게 가다가 엘보에서 꺾인다(모서리만 작게 둥글림). */
 export function orthoCurve(pts, r = 0.18) {
   const v = pts.map((p) => new THREE.Vector3(...p)); const path = new THREE.CurvePath(); let cur = v[0];
@@ -222,6 +267,7 @@ export class World {
   }
 
   build(level, logoTex, lang = 'ko') {
+    this.thermal = null; this.scene.overrideMaterial = null;
     this.lang = lang; this.movers = []; this.fans = [];
     this.dispose();
     const root = (this.root = new THREE.Group()); this.scene.add(root);
@@ -254,7 +300,7 @@ export class World {
     }
     // 방 바깥 바닥
     const out = new THREE.Mesh(new THREE.PlaneGeometry(w + 60, d + 60), M(level.outColor ?? 0x16253a, { roughness: 1, metalness: 0 })); out.rotation.x = -Math.PI / 2; out.position.y = -0.02; out.userData.sys = 'room'; root.add(out);
-    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(w, d), ceilM); ceil.rotation.x = -Math.PI / 2; ceil.position.y = h; ceil.userData.sys = 'room'; root.add(ceil);
+    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(w, d), ceilM); ceil.rotation.x = -Math.PI / 2; ceil.position.y = h; ceil.userData.sys = 'cover'; root.add(ceil);      // 열화상에서는 숨긴다(재질이 바뀌면 위에서도 보여 장면을 가린다)
     const lightM = glow(0xffffff, 1.4);
     for (let x = -w / 2 + 2.5; x < w / 2 - 1; x += 3.5) for (let z = -d / 2 + 2; z < d / 2 - 1; z += 4) { const lp = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.28), lightM); lp.rotation.x = Math.PI / 2; lp.position.set(x, h - 0.02, z); lp.userData.sys = 'led'; root.add(lp); }
 
@@ -278,7 +324,7 @@ export class World {
     }
     // 상부 케이블 트레이 (전력 경로를 따라)
     const trayM = M(0x4a5665, { metalness: 0.3, roughness: 0.7 });
-    for (const f of level.flows.power || []) for (let i = 0; i < f.pts.length - 1; i++) {
+    for (const f of (level.trays ? [] : level.flows.power || [])) for (let i = 0; i < f.pts.length - 1; i++) {      // level.trays 가 있으면 world_ext 가 사다리형 트레이를 그린다
       const a = f.pts[i], b = f.pts[i + 1]; if (Math.abs(a[1] - b[1]) > 0.2 || a[1] < 2.5) continue;
       const len = Math.hypot(b[0] - a[0], b[2] - a[2]); if (len < 0.3) continue;
       const t = box(len, 0.04, 0.24, trayM, (a[0] + b[0]) / 2, a[1] + 0.12, (a[2] + b[2]) / 2, 'struct'); t.rotation.y = -Math.atan2(b[2] - a[2], b[0] - a[0]); t.castShadow = false; root.add(t);
@@ -326,7 +372,9 @@ export class World {
   setMode(mode) {
     this.mode = mode;
     for (const k in this.flowGroups) this.flowGroups[k].visible = (mode === k) || (mode === 'bim' && k !== 'air');
-    this.heatGroup.visible = mode === 'heat';
+    this.heatGroup.visible = false;
+    // 열 분포: 장면 전체를 열화상 재질로 바꿔 그린다
+    if (mode === 'heat') { if (!this.thermal) this.thermal = thermalMaterial(this.level); this.scene.overrideMaterial = this.thermal; } else this.scene.overrideMaterial = null;
     const ghost = mode === 'xray' || mode === 'bim';
     for (const m of this.kit.shells) { m.transparent = ghost; m.opacity = ghost ? 0.16 : 1; m.depthWrite = !ghost; m.needsUpdate = true; }
     for (const m of this.roomMats) { m.transparent = mode === 'bim'; m.opacity = mode === 'bim' ? 0.18 : 1; m.depthWrite = mode !== 'bim'; m.needsUpdate = true; }
@@ -334,6 +382,7 @@ export class World {
       const s = o.userData.sys;
       if (s === 'inner') o.visible = ghost;
       if (s === 'face') o.visible = mode !== 'bim';
+      if (s === 'cover') o.visible = mode !== 'heat';        // 열화상에서는 통로 지붕이 랙을 가리지 않게 숨긴다
     });
     this.forceOutline = mode === 'bim';
   }

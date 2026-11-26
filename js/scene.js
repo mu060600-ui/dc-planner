@@ -16,17 +16,18 @@ export function makeLevel(input, r) {
   const variant = r.server.variant;
   const fill = [], items = [], air = [], liquid = [], power = [], heat = [];
   const rowInfo = [];
+  const hac = input.contain === 'hac';        // 더운 통로 밀폐: 랙 뒷면끼리 마주 본다 (기본은 찬 통로 밀폐: 앞면끼리)
   let left = shown;
   for (let i = 0; i < rows; i++) {
-    const p = Math.floor(i / 2), back = i % 2 === 1;
-    const z = z0 + p * 6 + (back ? 3 : 0), n = Math.min(perRow, left); left -= n;
+    const p = Math.floor(i / 2), second = i % 2 === 1;
+    const back = hac ? !second : second;       // back = 앞면이 -z 를 본다(rot 180)
+    const z = z0 + p * 6 + (second ? 3 : 0), n = Math.min(perRow, left); left -= n;
     fill.push({ variant, x: xs, z, count: n, rot: back ? 180 : 0, dx: 1 });
     rowInfo.push({ z, n, back, p });
-    heat.push({ pos: [xs + (n - 1) / 2, z + (back ? 1.0 : -1.0)], size: [n, 1.1], t: r.liquid ? 0.45 : 0.9 });
+    heat.push({ pos: [xs + (n - 1) / 2, z + (back ? 1.0 : -1.0)], size: [n, 1.1], t: r.liquid ? (hac ? 0.58 : 0.46) : (hac ? 0.98 : 0.88) });   // 랙 뒤쪽: 가둔 더운 통로는 더 뜨겁다
   }
   const xEnd = xs + perRow - 0.5;
   const aisles = []; for (let p = 0; p < pairs; p++) aisles.push(z0 + p * 6 + 1.5);
-  for (const za of aisles) heat.push({ pos: [xs + (perRow - 1) / 2, za], size: [perRow, 1.8], t: 0.1 });
 
   // 열 배출 설비 (오른쪽 기계 구역)
   const rejects = [];
@@ -43,8 +44,11 @@ export function makeLevel(input, r) {
   const zu = d / 2 - 2;
 
   // ---- 랙 줄 위치 정보: 앞면(찬 통로 쪽), 뒷면(더운 쪽)
-  const trenches = [], risers = [];
-  for (const ri of rowInfo) { ri.sgn = ri.back ? 1 : -1; ri.zFront = ri.z - ri.sgn * 0.55; ri.zRear = ri.z + ri.sgn * 0.55; ri.za = aisles[ri.p]; }
+  const trenches = [], risers = [], trays = [], ducts = [], zones2 = [];
+  for (const ri of rowInfo) { ri.sgn = ri.back ? 1 : -1; ri.zFront = ri.z - ri.sgn * 0.55; ri.zRear = ri.z + ri.sgn * 0.55; ri.za = aisles[ri.p]; ri.coldZ = ri.zFront - ri.sgn * 0.95; }
+  const coldLanes = [...new Set(rowInfo.map((ri) => ri.coldZ.toFixed(2)))].map(Number);      // 찬 공기가 지나는 통로들
+  const nearAisle = (z) => aisles.slice(0, 3).reduce((a, b) => (Math.abs(b - z) < Math.abs(a - z) ? b : a));
+  for (const cz of coldLanes) heat.push({ pos: [xs + (perRow - 1) / 2, cz], size: [perRow, 1.8], t: hac ? 0.12 : 0.07 });
 
   // ---- 공기 쪽 냉각 장비
   const units = [];                                  // 공조기 위치 (냉수 배관 연결용)
@@ -59,17 +63,18 @@ export function makeLevel(input, r) {
   if (input.cooling === 'inrow') {
     for (const ri of rowInfo) {
       // In-row 는 바로 옆에서 찬 공기를 내보내고, 랙 뒤의 더운 공기를 뒤쪽에서 다시 빨아들인다
-      air.push({ color: 'cold', pts: [[ri.ux, 1.0, ri.zFront - ri.sgn * 0.15], [ri.ux - 0.6, 0.9, (ri.zFront + ri.za) / 2], [xs + ri.n * 0.5, 0.9, (ri.zFront + ri.za) / 2], [xs, 0.9, (ri.zFront + ri.za) / 2]] });
-      for (let k = 1; k < ri.n; k += every) { const x = xs + k; air.push({ color: 'cold', pts: [[x, 0.9, (ri.zFront + ri.za) / 2], [x, 1.05, ri.zFront - ri.sgn * 0.1], [x, 1.1, ri.zFront + ri.sgn * 0.25]] }); air.push({ color: 'hot', pts: [[x, 1.2, ri.zRear - ri.sgn * 0.2], [x, 1.3, ri.zRear + ri.sgn * 0.3], [x + 0.6, 1.35, ri.zRear + ri.sgn * 0.45]] }); }
+      air.push({ color: 'cold', pts: [[ri.ux, 1.0, ri.zFront - ri.sgn * 0.15], [ri.ux - 0.6, 0.9, (ri.zFront + ri.coldZ) / 2], [xs + ri.n * 0.5, 0.9, (ri.zFront + ri.coldZ) / 2], [xs, 0.9, (ri.zFront + ri.coldZ) / 2]] });
+      for (let k = 1; k < ri.n; k += every) { const x = xs + k; air.push({ color: 'cold', pts: [[x, 0.9, (ri.zFront + ri.coldZ) / 2], [x, 1.05, ri.zFront - ri.sgn * 0.1], [x, 1.1, ri.zFront + ri.sgn * 0.25]] }); air.push({ color: 'hot', pts: [[x, 1.2, ri.zRear - ri.sgn * 0.2], [x, 1.3, ri.zRear + ri.sgn * 0.3], [x + 0.6, 1.35, ri.zRear + ri.sgn * 0.45]] }); }
       air.push({ color: 'hot', pts: [[xs, 1.35, ri.zRear + ri.sgn * 0.45], [xs + ri.n * 0.5, 1.35, ri.zRear + ri.sgn * 0.45], [ri.ux - 0.3, 1.35, ri.zRear + ri.sgn * 0.45], [ri.ux, 1.3, ri.zRear + ri.sgn * 0.1]] });
     }
   } else {
-    aisles.slice(0, 3).forEach((za) => air.push({ color: 'cold', pts: [[-13.5, 1.0, za], [-12.4, 0.7, za], [xs, 0.6, za], [xEnd, 0.6, za]] }));   // 찬 통로를 따라 공급
+    for (const cz of coldLanes) air.push({ color: 'cold', pts: [[-13.5, 1.0, nearAisle(cz)], [-12.4, 0.7, cz], [xs, 0.6, cz], [xEnd, 0.6, cz]] });   // 공조기 → 찬 통로를 따라 공급
     for (const ri of rowInfo) {
       const zu = aisles[Math.min(ri.p, 2)], zt = ri.zRear + ri.sgn * 0.55;
-      for (let k = 1; k < ri.n; k += every) { const x = xs + k; air.push({ color: 'cold', pts: [[x, 0.6, ri.za], [x, 0.95, (ri.zFront + ri.za) / 2], [x, 1.1, ri.zFront + ri.sgn * 0.25]] }); air.push({ color: 'hot', pts: [[x, 1.2, ri.zRear - ri.sgn * 0.2], [x, 1.5, ri.zRear + ri.sgn * 0.3], [x - 0.2, 2.6, zt], [x - 0.9, 3.0, zt]] }); }
+      for (let k = 1; k < ri.n; k += every) { const x = xs + k; air.push({ color: 'cold', pts: [[x, 0.6, ri.coldZ], [x, 0.95, (ri.zFront + ri.coldZ) / 2], [x, 1.1, ri.zFront + ri.sgn * 0.25]] }); air.push({ color: 'hot', pts: [[x, 1.2, ri.zRear - ri.sgn * 0.2], [x, 1.5, ri.zRear + ri.sgn * 0.3], [x - 0.2, 2.45, zt], [x - 0.9, 2.62, zt]] }); }
       // 랙 위로 모인 더운 공기가 공조기 상부로 돌아간다
-      air.push({ color: 'hot', pts: [[xEnd, 3.0, zt], [xs, 3.0, zt], [-12.6, 3.0, zt], [-13.4, 2.7, (zt + zu) / 2], [-14.0, 2.3, zu]] });
+      air.push({ color: 'hot', pts: [[xEnd, 2.62, zt], [xs, 2.62, zt], [-12.6, 2.62, zt], [-13.4, 2.5, (zt + zu) / 2], [-14.0, 2.3, zu]] });
+      ducts.push({ pts: [[xEnd, 3.08, zt], [-12.7, 3.08, zt], [-13.9, 2.45, zu]] });          // 더운 공기를 공조기로 되돌리는 환기 덕트
     }
   }
 
@@ -101,18 +106,40 @@ export function makeLevel(input, r) {
       liquid.push({ color: 'ret', r: 0.05, pts: [[x + 0.15, 2.5, z + 0.3], [x + 0.15, 3.55, z + 0.3], [x + 0.15, 3.55, hz + 0.5]] });
     }
   }
-  // 전력
-  aisles.forEach((za) => power.push({ color: 'power', pts: [[13.8, 2.0, zu], [12, 3.8, zu], [4.2, 3.8, zu], [4.2, 3.8, za], [xEnd, 3.8, za], [xs, 3.8, za]] }));
+  // ---- 전력: UPS → 주 트레이 → 랙 줄마다 분기. 전력 흐름은 케이블 트레이를 따라간다
+  const TX = 3.4, TY = 2.46, DX = 3.95, DY = 2.82;
+  const zMin = Math.min(...rowInfo.map((ri) => ri.z)) - 0.2;
+  for (const ri of rowInfo) {
+    power.push({ color: 'power', pts: [[13.6, 2.0, zu], [13.6, TY, zu], [TX, TY, zu], [TX, TY, ri.z], [xs, TY, ri.z]] });
+    trays.push({ kind: 'power', pts: [[TX, TY, ri.z], [xs - 0.45, TY, ri.z]] });                                   // 랙 줄 위 전력 트레이
+    trays.push({ kind: 'data', pts: [[DX, DY, ri.z + 0.3], [xs - 0.45, DY, ri.z + 0.3]] });                         // 랙 줄 위 광케이블 덕트
+  }
+  trays.push({ kind: 'power', w: 0.6, pts: [[TX, TY, zMin], [TX, TY, zu], [13.6, TY, zu], [13.6, 2.05, zu]] });     // 주 전력 트레이
+  trays.push({ kind: 'data', pts: [[DX, DY, zMin + 0.3], [DX, DY, d / 2 - 0.5]] });                                // 주 광케이블 덕트
   power.push({ color: 'power', pts: [[9.6, 2.0, d / 2 - 0.9], [11.5, 3.6, d / 2 - 1.4], [13.8, 2.0, zu]] });
+
+  // ---- 찬 통로 / 더운 통로 바닥 표시 (통로 구성에 따라 위치가 바뀐다)
+  for (const cz of coldLanes) zones2.push({ rect: [xs - 0.6, cz - 0.95, xEnd + 0.6, cz + 0.95], color: 0x3b9bff, opacity: 0.3, name: { ko: hac ? '찬 통로 · COLD AISLE' : '찬 통로 (밀폐) · COLD AISLE' }, textColor: '#0a4aa0', labelW: 4.6 });
+  const hotSeen = new Set();
+  for (const ri of rowInfo) {
+    const key = hac ? ri.p : rowInfo.indexOf(ri); const first = !hotSeen.has(key); hotSeen.add(key);
+    zones2.push({ rect: [xs - 0.6, Math.min(ri.zRear, ri.zRear + ri.sgn * 1.0), xEnd + 0.6, Math.max(ri.zRear, ri.zRear + ri.sgn * 1.0)], color: 0xff5a3c, opacity: 0.26, name: first ? { ko: hac ? '더운 통로 (밀폐) · HOT AISLE' : '더운 통로 · HOT AISLE' } : null, textColor: '#a8200a', labelW: 4.6 });
+  }
+
+  // ---- 열화상용 열원·냉원: 설비마다 온도를 준다 (교육용 표현)
+  const HT = { crah: 0.06, fwu: 0.06, inrow: 0.08, cdu: 0.5, chiller: 0.62, drycooler: 0.66, ups: 0.56, switchgear: 0.5, generator: 0.42, pump: 0.46 };
+  for (const it of items) if (HT[it.type] !== undefined) heat.push({ pos: it.pos, size: it.type === 'inrow' || it.type === 'cdu' ? [0.9, 1.3] : [2.4, 2.0], t: HT[it.type] });
 
   return {
     id: 'plan', room: { w, d, h: 4.2 }, outColor: 0xd5dee9, spawn: [0, 0, 0],
     zones: [
       { rect: [-15, -d / 2, 4.3, d / 2], color: 0xcfd9e4, opacity: 0, name: { ko: r.racks > shown ? `서버홀 (전체 ${r.racks.toLocaleString()}랙 중 ${shown}랙만 표시)` : `서버홀 (${shown}랙)` } },
       { rect: [4.3, -d / 2, 15, d / 2], color: 0x9aa89a, opacity: 0.55, name: { ko: '기계 · 전력 설비' } },
+      ...zones2,
     ],
-    walls: [], fill, items, missions: [], heat, trenches, risers,
-    contain: input.cooling === 'air' || input.cooling === 'inrow' ? aisles.map((za) => ({ rect: [xs - 0.5, za - 0.95, xEnd, za + 0.95] })) : [],
+    walls: [], fill, items, missions: [], heat, trenches, risers, trays, ducts,
+    contain: aisles.map((za) => ({ rect: [xs - 0.5, za - 0.95, xEnd, za + 0.95], hot: hac })),       // 밀폐한 통로의 지붕 (찬 통로는 파랑, 더운 통로는 빨강)
+    ambient: hac ? 0.16 : (r.liquid ? 0.34 : 0.5),                                                    // 열화상 바탕: 더운 통로를 가두면 방은 시원하고, 찬 통로를 가두면 방이 따뜻하다
     flows: { air, liquid, power },
   };
 }
@@ -173,7 +200,7 @@ export class Viewer {
   }
   setView(v, keepAngle = false) {
     this.view = v; const site = v === 'site';
-    if (this.world.root) this.world.root.visible = !site;
+    if (this.world.root) { this.world.root.visible = !site; if (site) this.scene.overrideMaterial = null; else this.world.setMode(this.mode); }
     if (this.site) this.site.group.visible = site;
     const c = this.sun.shadow.camera;
     if (site && this.site) {
@@ -183,11 +210,11 @@ export class Viewer {
     } else {
       this.minDist = 12; this.maxDist = 90; this.dist = this.hallDist || 44; this.lookY = 1.2;
       this.sun.position.set(10, 22, 12); c.left = -24; c.right = 24; c.top = 24; c.bottom = -24; c.far = 70; this.sun.shadow.normalBias = 0.03;
-      this.scene.background.set(0xe8eef5);
+      this.scene.background.set(this.mode === 'heat' ? 0x0a0616 : 0xe8eef5);
     }
     c.updateProjectionMatrix();
     if (!keepAngle) { this.elv = site ? 0.6 : 0.72; this.auto = true; }
   }
-  setMode(m) { this.mode = m; if (this.world.root) this.world.setMode(m); }
+  setMode(m) { this.mode = m; if (this.world.root && this.view === 'hall') { this.world.setMode(m); this.scene.background.set(m === 'heat' ? 0x0a0616 : 0xe8eef5); } }
   hasFlow(kind) { return this.world.root ? this.world.hasFlow(kind) : false; }
 }

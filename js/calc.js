@@ -24,6 +24,11 @@ export const COOLING = {
   inrow: { name: '고밀도 공랭', desc: '랙 사이 In-row 냉방기로 가까이에서 식힘' },
   dlc: { name: '액체냉각', desc: '칩에 냉각수를 직접 보냄 (DLC + CDU)' },
 };
+// 통로 구성: 랙을 어떻게 마주 보게 놓고 어느 쪽 통로를 막을지
+export const CONTAIN = {
+  cac: { name: '찬 통로 밀폐 (Cold Aisle)', desc: '랙 앞면끼리 마주 봄. 찬 공기를 통로에 가두고, 방 전체로는 더운 공기가 돌아감' },
+  hac: { name: '더운 통로 밀폐 (Hot Aisle)', desc: '랙 뒷면끼리 마주 봄. 더운 공기를 통로에 가두고, 방 전체는 시원하게 유지' },
+};
 export const REJECT = {
   chiller: { name: 'Chiller 중심', desc: '냉동기로 차가운 물을 만듦' },
   dry: { name: 'Dry Cooler 중심', desc: '바깥 공기로만 식힘, 물 사용 적음' },
@@ -156,6 +161,8 @@ export function plan(input) {
   if (liquid && density <= 15) add('warn', '이 밀도에서는 공랭식이 더 단순하고 경제적입니다. 배관 공사와 누설 관리 부담을 감안하세요.');
   if (liquid && reject === 'chiller') add('info', '액체냉각은 비교적 따뜻한 물로도 식힐 수 있어 Dry Cooler를 쓰면 냉각 전력을 더 줄일 수 있습니다.');
   if (!liquid && reject === 'dry') add('warn', '공랭식은 더 차가운 물이 필요해, 더운 날에는 Dry Cooler만으로 부족할 수 있습니다. Chiller 보조를 검토하세요.');
+  if (input.contain === 'hac') add('info', '더운 통로 밀폐는 방 전체가 시원해 작업 환경이 좋고, 더운 공기를 높은 온도로 모아 돌려보내 공조 효율에 유리한 편입니다. 가둔 통로 안은 매우 뜨거워 점검 작업에 주의가 필요합니다.');
+  else if (!liquid) add('info', '찬 통로 밀폐는 기존 전산실에 덧대어 설치하기 쉽습니다. 다만 방 전체가 더운 공기로 차서 랙 뒤쪽과 주변이 따뜻해집니다.');
   if (redundancy === 'N') add('warn', '예비 설비가 없으면 장비 한 대만 고장 나도 서비스가 멈출 수 있습니다.');
   const order = ['22.9', '154', '345'];
   if (order.indexOf(voltage) < order.indexOf(recVoltage)) add('bad', `전체 시설 전력 ${powerLabel(Math.round(facilityKw))}는 ${voltage}kV로 받기에 너무 큽니다. ${recVoltage}kV 수전과 부지 내 변전소가 필요합니다.`);

@@ -1,12 +1,12 @@
 // 화면: 선택 → 계산 → 결과(지표, 점검, 자재 목록, 3D 배치), 엑셀 저장
-import { WORKLOADS, SERVERS, COOLING, REJECT, REDUNDANCY, VOLTAGE, EXPANSION, ASSUMPTIONS, plan, fmt, powerLabel } from './calc.js';
+import { WORKLOADS, SERVERS, COOLING, CONTAIN, REJECT, REDUNDANCY, VOLTAGE, EXPANSION, ASSUMPTIONS, plan, fmt, powerLabel } from './calc.js';
 import { makeLevel, Viewer } from './scene.js';
 import { initMap } from './map.js';
 import { landInfo } from './land.js';
 
 const INQUIRY_URL = 'https://www.aik.co.kr/board/list.html?pid=57&fno=8';
 const $ = (s) => document.querySelector(s);
-const state = { workload: 'inf', itKw: 5000, density: 40, server: 'smc-gpu-air', cooling: 'inrow', reject: 'mix', redundancy: 'N+1', voltage: 'auto', expansion: '1' };
+const state = { workload: 'inf', itKw: 5000, density: 40, server: 'smc-gpu-air', cooling: 'inrow', contain: 'cac', reject: 'mix', redundancy: 'N+1', voltage: 'auto', expansion: '1' };
 let result = null, viewer = null, buildT = null, mapApi = null, site = null, land = null, landSeq = 0;
 
 // 단계: 한 화면에 한 단계씩, 아래 '다음' 버튼으로 넘어간다
@@ -15,6 +15,7 @@ let step = 1, maxStep = 1;
 
 // IT 전력 슬라이더: 50kW ~ 300MW 를 로그 눈금으로
 const IT_MIN = 50, IT_MAX = 300000;
+const fromItSafe = (kw) => Math.max(0, Math.min(1000, fromIt(kw)));
 const toIt = (v) => { const kw = IT_MIN * Math.pow(IT_MAX / IT_MIN, v / 1000); const step = kw < 1000 ? 10 : kw < 10000 ? 100 : 1000; return Math.round(kw / step) * step; };
 const fromIt = (kw) => Math.round(Math.log(kw / IT_MIN) / Math.log(IT_MAX / IT_MIN) * 1000);
 
@@ -35,13 +36,16 @@ function render() {
   const servers = Object.entries(SERVERS).map(([k, s]) => [k, { name: s.name, desc: `${s.size} · ${s.note} · 모델 ${s.model} <a href="${s.url}" target="_blank" rel="noopener">공식 페이지 ↗</a>`, dim: !s.fit.includes(state.workload), cool: s.cool, rec: WORKLOADS[state.workload].server === k }]);
   optButtons($('#o-server'), servers, 'server', (k, o) => `<span class="tag ${o.cool}">${o.cool === 'liquid' ? '액체냉각' : '공랭'}</span>${o.rec ? '<span class="tag rec">추천</span>' : ''}`);
   optButtons($('#o-cooling'), Object.entries(COOLING), 'cooling');
+  optButtons($('#o-contain'), Object.entries(CONTAIN), 'contain');
   optButtons($('#o-reject'), Object.entries(REJECT), 'reject');
   optButtons($('#o-redundancy'), Object.entries(REDUNDANCY), 'redundancy');
   const rec = plan(state).recVoltage;
   optButtons($('#o-voltage'), Object.entries(VOLTAGE), 'voltage', (k) => (k === rec ? '<span class="tag rec">이 규모에 맞음</span>' : ''));
   optButtons($('#o-expansion'), Object.entries(EXPANSION), 'expansion');
-  $('#s-it').value = fromIt(state.itKw); $('#v-it').textContent = powerLabel(state.itKw);
-  $('#s-den').value = state.density; $('#v-den').textContent = `${state.density} kW`;
+  $('#s-it').value = Math.max(0, Math.min(1000, fromIt(state.itKw))); $('#v-it').textContent = powerLabel(state.itKw);
+  $('#s-den').value = Math.min(140, state.density); $('#v-den').textContent = `${state.density} kW`;
+  if (document.activeElement !== $('#n-den')) $('#n-den').value = state.density;
+  if (document.activeElement !== $('#n-it')) { const u = state.itKw >= 1000 ? 1000 : 1; $('#u-it').value = String(u); $('#n-it').value = +(state.itKw / u).toFixed(3); }
 
   const r = (result = plan(state));
   const k = (label, val, sub = '') => `<div class="kpi"><span>${label}</span><b>${val}</b>${sub ? `<small>${sub}</small>` : ''}</div>`;
@@ -73,6 +77,8 @@ function renderModes() {
   $('#views').innerHTML = [['site', '부지 전체'], ['hall', '서버실 안']].map(([v, n]) => `<button data-v="${v}" class="${view === v ? 'on' : ''}">${n}</button>`).join('');
   $('#modes').innerHTML = view === 'hall' ? MODES.map(([m, n]) => `<button data-m="${m}" class="${mode === m ? 'on' : ''}">${n}</button>`).join('') : '';
   $('#modes').style.display = view === 'hall' ? '' : 'none';
+  $('#thermal').classList.toggle('hidden', !(view === 'hall' && mode === 'heat'));
+  $('#aislekey').classList.toggle('hidden', !(view === 'hall' && mode === 'air'));
 }
 function build3d() {
   if (!viewer) {
@@ -95,8 +101,9 @@ function landText() { return (land.admin ? land.admin + ' · ' : '') + (land.kin
 function renderNav() {
   $('#stepper').innerHTML = STEPS.map((x, i) => `<button data-s="${i + 1}" class="${step === i + 1 ? 'on' : i + 1 < step ? 'done' : ''}" ${i + 1 > maxStep ? 'disabled' : ''} title="${x[1]}"><i>${i + 1}</i><span>${x[0]}</span></button>`).join('');
   const last = step === STEPS.length;
-  $('#b-prev').disabled = step === 1;
-  $('#b-next').textContent = last ? '처음부터 다시' : step === 1 && !site ? '부지 없이 다음: 용도·규모 →' : `다음: ${STEPS[step][0]} →`;
+  const nextText = last ? '처음부터 다시' : step === 1 && !site ? '부지 없이 다음: 용도·규모 →' : `다음: ${STEPS[step][0]} →`;
+  document.querySelectorAll('[data-nav=next]').forEach((b) => { b.textContent = nextText; });
+  document.querySelectorAll('[data-nav=prev]').forEach((b) => { b.style.visibility = step === 1 ? 'hidden' : ''; });
   $('#nav-title').textContent = `${step} / ${STEPS.length} · ${STEPS[step - 1][0]}`;
   const bad = result && result.checks.find((c) => c.level === 'bad');
   $('#nav-hint').textContent = step === 1 ? (site && site.match ? `가까운 변전소: ${site.match.name} ${site.match.kv}kV · ${fmt(site.match.km, 1)}km` : '지도를 눌러 부지를 고르면 가까운 변전소를 알려 드립니다')
@@ -171,9 +178,10 @@ async function startMap() {
 function summaryText() {
   const r = result, w = WORKLOADS[state.workload];
   return [
-    '[AI KOREA 데이터센터 설계해 보기 - 구성 요약]',
+    '[AI KOREA 데이터센터 구축 시뮬레이터 - 구성 요약]',
     `용도: ${w.name}`, `IT 전력: ${powerLabel(state.itKw)} / 랙당 ${state.density}kW / 랙 ${fmt(r.racks)}대`,
     `서버: ${r.server.name} (${r.server.model})`,
+    `통로 구성: ${CONTAIN[state.contain].name}`,
     `냉각: ${COOLING[state.cooling].name} / 열 배출: ${REJECT[state.reject].name} / 예비: ${REDUNDANCY[state.redundancy].name}`,
     `전체 시설 전력 예시: ${powerLabel(Math.round(r.facilityKw))} / PUE 예시 ${fmt(r.pue, 2)} / 서버실 면적 약 ${fmt(r.area)}㎡`,
     `수전: ${r.voltage}kV, 약 ${fmt(r.mva, r.mva < 10 ? 1 : 0)}MVA, 변압기 ${r.transformers}대 / 부지 약 ${fmt(r.siteArea)}㎡ (약 ${fmt(r.siteArea / 3.3058)}평), 건물 ${r.buildings}동`,
@@ -185,9 +193,9 @@ function summaryText() {
 }
 function csv() {
   const q = (s) => `"${String(s).replace(/"/g, '""')}"`; const r = result;
-  const rows = [['AI KOREA 데이터센터 설계해 보기'], ['교육·상담용 개략 추정값이며 실제 설계와 견적을 대체하지 않습니다.'], [],
+  const rows = [['AI KOREA 데이터센터 구축 시뮬레이터'], ['교육·상담용 개략 추정값이며 실제 설계와 견적을 대체하지 않습니다.'], [],
     ['항목', '값'], ['용도', WORKLOADS[state.workload].name], ['IT 전력 (kW)', state.itKw], ['랙당 전력 밀도 (kW)', state.density], ['랙 수', r.racks],
-    ['서버', `${r.server.name} (${r.server.model})`], ['냉각 방식', COOLING[state.cooling].name], ['열 배출', REJECT[state.reject].name], ['예비 설비', REDUNDANCY[state.redundancy].name],
+    ['서버', `${r.server.name} (${r.server.model})`], ['냉각 방식', COOLING[state.cooling].name], ['통로 구성', CONTAIN[state.contain].name], ['열 배출', REJECT[state.reject].name], ['예비 설비', REDUNDANCY[state.redundancy].name],
     ['전체 시설 전력 예시 (kW)', Math.round(r.facilityKw)], ['냉각 전력 예시 (kW)', Math.round(r.coolKw)], ['PUE 예시', r.pue.toFixed(2)], ['서버실 면적 (㎡)', Math.round(r.area)], ['수전 전압 (kV)', r.voltage], ['수전 용량 (MVA)', r.mva.toFixed(1)], ['변압기 (대)', r.transformers], ['건물 바닥 면적 (㎡)', Math.round(r.bldgArea)], ['변전소 면적 (㎡)', r.subArea], ['부지 면적 (㎡)', Math.round(r.siteArea)], ['건물 (동)', r.buildings],
     ['냉각수로 가져가는 열 (kW)', Math.round(r.liqKw)], ['공기로 식히는 열 (kW)', Math.round(r.airKw)], ['냉각수 유량 (L/min)', Math.round(r.flowLpm)],
     ...(land && land.ok ? [['토지 구분 (공개 지도 기준, 참고용)', landText()]] : []),
@@ -204,6 +212,10 @@ function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.ad
 $('#cta-top').href = $('#cta-bottom').href = INQUIRY_URL;
 $('#s-it').addEventListener('input', (e) => { state.itKw = toIt(+e.target.value); render(); });
 $('#s-den').addEventListener('input', (e) => { state.density = +e.target.value; render(); });
+// 숫자로 직접 입력: 규모는 0.05MW(50kW)~1,000MW, 밀도는 1~300kW
+const typedIt = () => { const v = parseFloat($('#n-it').value) * Number($('#u-it').value); if (isFinite(v) && v > 0) { state.itKw = Math.max(50, Math.min(1000000, Math.round(v))); render(); } };
+$('#n-it').addEventListener('input', typedIt); $('#u-it').addEventListener('change', typedIt);
+$('#n-den').addEventListener('input', (e) => { const v = parseFloat(e.target.value); if (isFinite(v) && v > 0) { state.density = Math.max(1, Math.min(300, +v.toFixed(1))); render(); } });
 $('#o-it').innerHTML = [50, 500, 5000, 30000, 100000, 300000].map((v) => `<button data-v="${v}">${powerLabel(v)}</button>`).join('');
 $('#o-it').onclick = (e) => { const b = e.target.closest('button'); if (b) { state.itKw = +b.dataset.v; render(); } };
 $('#modes').onclick = (e) => {
@@ -213,8 +225,11 @@ $('#views').onclick = (e) => { const b = e.target.closest('button'); if (!b) ret
 $('#b-csv').onclick = () => { csv(); toast('CSV 파일로 저장했습니다. 엑셀에서 열 수 있습니다.'); };
 $('#b-copy').onclick = async () => { try { await navigator.clipboard.writeText(summaryText()); toast('구성 요약을 복사했습니다.'); } catch (e) { toast('복사하지 못했습니다. 브라우저 권한을 확인해 주세요.'); } };
 $('#assume').innerHTML = '<tr><th>가정</th><th>값</th><th>설명</th></tr>' + ASSUMPTIONS.map((a) => `<tr><td>${a[0]}</td><td class="c" style="white-space:normal">${a[1]}</td><td class="c" style="white-space:normal">${a[2]}</td></tr>`).join('');
-$('#b-prev').onclick = () => go(step - 1);
-$('#b-next').onclick = () => go(step === STEPS.length ? 1 : step + 1);
+document.addEventListener('click', (e) => { const b = e.target.closest('[data-nav]'); if (!b) return; if (b.dataset.nav === 'prev') go(step - 1); else go(step === STEPS.length ? 1 : step + 1); });
+// 3D 크게 보기
+const setExpand = (on) => { $('.viewer').classList.toggle('max', on); $('#b-expand').textContent = on ? '✕ 닫기' : '⛶ 크게 보기'; setTimeout(() => viewer && viewer.resize(), 60); };
+$('#b-expand').onclick = () => setExpand(!$('.viewer').classList.contains('max'));
+addEventListener('keydown', (e) => { if (e.key === 'Escape') setExpand(false); });
 $('#stepper').onclick = (e) => { const b = e.target.closest('button'); if (b && !b.disabled) go(+b.dataset.s); };
 addEventListener('keydown', (e) => { if (e.target.matches('input, textarea')) return; if (e.key === 'ArrowRight' && e.altKey) go(step + 1); if (e.key === 'ArrowLeft' && e.altKey) go(step - 1); });
 renderModes(); render(); go(1); startMap();

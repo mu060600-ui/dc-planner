@@ -64,7 +64,7 @@ function render() {
   $('#bom').innerHTML = '<tr><th>분류</th><th>품목</th><th style="text-align:right">수량</th><th>비고</th></tr>'
     + r.bom.map((b) => `<tr><td class="c">${b.cat}</td><td>${b.item}</td><td class="n">${typeof b.qty === 'number' ? fmt(b.qty) + ' ' + b.unit : b.qty}</td><td class="c" style="white-space:normal">${b.note}</td></tr>`).join('');
   const shown = Math.min(r.racks, 48);
-  state._note = { hall: (r.racks > shown ? `전체 ${fmt(r.racks)}랙 가운데 대표 구역 ${shown}랙만 그렸습니다. ` : '') + '드래그로 돌려 보고 휠로 확대합니다. 교육용 개념 모델입니다.',
+  state._note = { hall: (r.racks > shown ? `전체 ${fmt(r.racks)}랙 가운데 대표 구역 ${shown}랙만 그렸습니다. ` : '') + '드래그로 돌려 보고 휠로 확대합니다. 장치에 커서를 올리면 이름이 나옵니다. 교육용 개념 모델입니다.',
     site: `부지 약 ${fmt(r.siteArea)}㎡, 건물 ${r.buildings}동${r.buildings > 4 ? '(4동까지만 표시)' : ''}, ${r.voltage === '22.9' ? '22.9kV 수전설비' : r.voltage + 'kV 변전소'}. 배치는 개념 표현이며 실제 부지 조건에 따라 달라집니다.` };
   $('#vnote').textContent = state._note[view];
   if (mapApi) mapApi.setNeed(needKv()); renderSite(); renderRecap(); renderNav();
@@ -79,6 +79,7 @@ function renderModes() {
   $('#modes').style.display = view === 'hall' ? '' : 'none';
   $('#thermal').classList.toggle('hidden', !(view === 'hall' && mode === 'heat'));
   $('#aislekey').classList.toggle('hidden', !(view === 'hall' && mode === 'air'));
+  $('#pipekey').classList.toggle('hidden', !(view === 'hall' && mode === 'liquid'));
 }
 function build3d() {
   if (!viewer) {

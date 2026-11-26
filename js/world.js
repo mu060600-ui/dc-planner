@@ -30,7 +30,7 @@ function thermalMaterial(level) {
       uniform vec4 uZ[32]; uniform float uT[32]; uniform int uN; uniform float uAmb; varying vec3 vW; varying vec3 vN;
       vec3 ramp(float t) {
         t = clamp(t, 0.0, 1.0) * 5.0;
-        vec3 c0 = vec3(0.03, 0.0, 0.16), c1 = vec3(0.36, 0.0, 0.58), c2 = vec3(0.86, 0.08, 0.36), c3 = vec3(1.0, 0.48, 0.04), c4 = vec3(1.0, 0.88, 0.25), c5 = vec3(1.0, 1.0, 0.96);
+        vec3 c0 = vec3(0.0, 0.05, 0.55), c1 = vec3(0.0, 0.55, 1.0), c2 = vec3(0.0, 0.85, 0.55), c3 = vec3(0.95, 0.92, 0.1), c4 = vec3(1.0, 0.5, 0.0), c5 = vec3(0.9, 0.05, 0.05);      // 파랑 → 하늘 → 초록 → 노랑 → 주황 → 빨강
         if (t < 1.0) return mix(c0, c1, t); if (t < 2.0) return mix(c1, c2, t - 1.0); if (t < 3.0) return mix(c2, c3, t - 2.0); if (t < 4.0) return mix(c3, c4, t - 3.0); return mix(c4, c5, t - 4.0);
       }
       void main() {
@@ -257,10 +257,11 @@ export class Kit {
 
 // ------------------------------------------------------------------ 레벨
 export class World {
-  constructor(scene) { this.scene = scene; this.root = null; this.colliders = []; this.items = []; this.flowGroups = {}; this.particles = []; this.mode = 'normal'; this.roomH = 3.4; }
+  constructor(scene) { this.scene = scene; this.root = null; this.colliders = []; this.items = []; this.flowGroups = {}; this.particles = []; this.mode = 'normal'; this.roomH = 3.4; this.overlayScene = new THREE.Scene(); }      // overlayScene: 열화상 위에 덧그리는 공기 화살표
 
   dispose() {
     if (!this.root) return;
+    if (this.flowGroups.air) this.root.add(this.flowGroups.air);
     this.scene.remove(this.root);
     this.root.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
     this.root = null; this.colliders = []; this.items = []; this.flowGroups = {}; this.particles = []; this.movers = []; this.fans = [];
@@ -337,6 +338,8 @@ export class World {
   buildFlows(level) {
     const sphere = new THREE.SphereGeometry(0.07, 10, 8);
     const arrow = new THREE.ConeGeometry(0.1, 0.34, 8); arrow.rotateX(Math.PI / 2);   // 공기 흐름은 진행 방향을 가리키는 화살표
+    const warrow = new THREE.ConeGeometry(0.13, 0.42, 10); warrow.rotateX(Math.PI / 2);   // 냉각수도 진행 방향을 가리키는 화살표
+    const LIQ = { supply: 0x8fdcff, ret: 0xffa08f };                                      // 배관 색보다 밝게 해서 배관 위에서 도드라지게
     for (const kind of ['air', 'power', 'liquid']) {
       const grp = new THREE.Group(); grp.visible = false; this.root.add(grp); this.flowGroups[kind] = grp;
       for (const f of level.flows[kind] || []) {
@@ -344,15 +347,15 @@ export class World {
         if (kind === 'liquid') {
           // 냉각수 배관은 항상 보인다 (공급 = 파랑, 환수 = 빨강)
           const pipe = new THREE.Mesh(new THREE.TubeGeometry(curve, Math.max(16, Math.round(curve.getLength() * 8)), f.r || 0.07, 10), f.color === 'ret' ? this.kit.pipeR : this.kit.pipeS);
-          pipe.castShadow = true; pipe.userData.sys = 'pipe'; this.root.add(pipe);
+          pipe.castShadow = true; pipe.userData.sys = 'pipe'; pipe.userData.tip = f.color === 'ret' ? '냉각수 회수 배관|서버 열을 받아 데워진 물이 돌아가는 길' : '냉각수 공급 배관|차가운 물이 서버 쪽으로 가는 길'; this.root.add(pipe);
         }
         const col = C[f.color] ?? 0xffffff; const len = curve.getLength();
-        const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, Math.max(12, Math.round(len * 6)), kind === 'air' ? 0.035 : kind === 'liquid' ? (f.r || 0.07) + 0.03 : 0.035, 8), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: kind === 'air' ? 0.16 : kind === 'liquid' ? 0.3 : 0.5, depthWrite: false }));
+        const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, Math.max(12, Math.round(len * 6)), kind === 'air' ? 0.035 : kind === 'liquid' ? (f.r || 0.07) + 0.045 : 0.035, 8), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: kind === 'air' ? 0.16 : kind === 'liquid' ? 0.42 : 0.5, depthWrite: false }));
         tube.userData.sys = 'flow'; grp.add(tube);
-        const n = Math.min(70, Math.max(kind === 'air' ? 2 : 3, Math.round(len * (kind === 'air' ? 0.9 : 1.6))));
-        const inst = new THREE.InstancedMesh(kind === 'air' ? arrow : sphere, new THREE.MeshBasicMaterial({ color: col }), n);
+        const n = Math.min(70, Math.max(kind === 'air' ? 2 : 3, Math.round(len * (kind === 'air' ? 0.9 : kind === 'liquid' ? 1.25 : 1.6))));
+        const inst = new THREE.InstancedMesh(kind === 'air' ? arrow : kind === 'liquid' ? warrow : sphere, new THREE.MeshBasicMaterial({ color: kind === 'liquid' ? (LIQ[f.color] ?? col) : col, toneMapped: kind !== 'liquid' }), n);
         inst.userData.sys = 'flow'; grp.add(inst);
-        this.particles.push({ inst, curve, n, speed: (kind === 'power' ? 2.2 : kind === 'air' ? 1.6 : 1.3) / len, kind });
+        this.particles.push({ inst, tube, col, curve, n, speed: (kind === 'power' ? 2.2 : kind === 'air' ? 1.6 : 2.0) / len, kind, scale: kind === 'liquid' ? Math.min(1.5, Math.max(0.75, (f.r || 0.07) / 0.07)) : 1 });
       }
     }
   }
@@ -373,6 +376,11 @@ export class World {
     this.mode = mode;
     for (const k in this.flowGroups) this.flowGroups[k].visible = (mode === k) || (mode === 'bim' && k !== 'air');
     this.heatGroup.visible = false;
+    const airG = this.flowGroups.air;
+    if (airG) {
+      if (mode === 'heat') { this.overlayScene.add(airG); airG.visible = true; } else this.root.add(airG);
+      for (const p of this.particles) if (p.kind === 'air') { p.inst.material.color.set(mode === 'heat' ? 0xffffff : p.col); p.tube.material.color.set(mode === 'heat' ? 0xffffff : p.col); p.tube.material.opacity = mode === 'heat' ? 0.32 : 0.16; }
+    }
     // 열 분포: 장면 전체를 열화상 재질로 바꿔 그린다
     if (mode === 'heat') { if (!this.thermal) this.thermal = thermalMaterial(this.level); this.scene.overrideMaterial = this.thermal; } else this.scene.overrideMaterial = null;
     const ghost = mode === 'xray' || mode === 'bim';
@@ -393,7 +401,7 @@ export class World {
       for (let i = 0; i < p.n; i++) {
         const u = ((time * p.speed + i / p.n) % 1 + 1) % 1;
         p.curve.getPointAt(u, P);
-        if (p.kind === 'air') { p.curve.getTangentAt(u, TAN); DUM.position.copy(P); DUM.lookAt(P.x + TAN.x, P.y + TAN.y, P.z + TAN.z); DUM.updateMatrix(); p.inst.setMatrixAt(i, DUM.matrix); }
+        if (p.kind !== 'power') { p.curve.getTangentAt(u, TAN); DUM.position.copy(P); DUM.scale.setScalar(p.scale); DUM.lookAt(P.x + TAN.x, P.y + TAN.y, P.z + TAN.z); DUM.updateMatrix(); p.inst.setMatrixAt(i, DUM.matrix); }
         else { MAT.makeTranslation(P.x, P.y, P.z); p.inst.setMatrixAt(i, MAT); }
       }
       p.inst.instanceMatrix.needsUpdate = true;

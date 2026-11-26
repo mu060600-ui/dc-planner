@@ -144,6 +144,20 @@ export function makeLevel(input, r) {
   };
 }
 
+// 커서를 올렸을 때 보여 줄 장치 이름과 한 줄 설명
+const TIPS = {
+  inrow: 'In-Row 냉방기|랙 줄 사이에 끼워 넣어, 뒤쪽 더운 공기를 바로 식혀 앞쪽으로 내보냅니다',
+  crah: 'CRAH 공조기|차가운 물로 공기를 식혀 서버실에 불어 넣는 대형 공조기',
+  fwu: '팬월 유닛 (FWU)|벽면에 큰 팬을 줄지어 달아 찬 공기를 넓게 밀어 주는 공조기',
+  cdu: 'CDU (냉각수 분배 장치)|서버로 가는 냉각수를 나눠 보내고 온도와 압력을 맞춥니다',
+  pump: '냉수 펌프|차가운 물을 배관으로 밀어 순환시킵니다',
+  drycooler: '드라이쿨러|바깥 공기로 냉각수의 열을 버리는 실외 장비',
+  chiller: '칠러 (냉동기)|차가운 물을 만들어 내는 장비',
+  generator: '비상발전기|정전이 길어질 때 전기를 직접 만들어 공급합니다',
+  switchgear: '수배전반|들어온 전기를 받아 설비별로 나눠 보냅니다',
+  ups: 'UPS (무정전 전원 장치)|정전 순간에도 배터리로 전기를 끊김 없이 이어 줍니다',
+  rack: '서버 랙|서버를 층층이 꽂는 캐비닛',
+};
 export class Viewer {
   constructor(el) {
     this.el = el;
@@ -165,7 +179,31 @@ export class Viewer {
     this.view = 'site'; this.site = null; this.minDist = 12; this.maxDist = 90; this.lookY = 1.2;
     this.world = new World(scene);
     this.ang = 0.7; this.elv = 0.72; this.dist = 44; this.auto = true; this.mode = 'normal'; this.center = new THREE.Vector3();
+    // 커서를 올리면 어떤 장치인지 알려 주는 말풍선
+    const tip = (this.tipEl = document.createElement('div')); tip.className = 'tip3d hidden'; el.appendChild(tip);
+    const ray = new THREE.Raycaster(); const ndc = new THREE.Vector2(); let hoverXY = null, hoverDirty = false;
+    const SKIP = new Set(['flow', 'cover', 'outline', 'inner']);
+    const seen = (o) => { for (let p = o; p; p = p.parent) if (!p.visible) return false; return true; };
+    this.pick = () => {
+      hoverDirty = false; let found = null, item = null;
+      if (hoverXY && this.view === 'hall' && this.world.root) {
+        const b = dom.getBoundingClientRect(); ndc.set(((hoverXY[0] - b.left) / b.width) * 2 - 1, -((hoverXY[1] - b.top) / b.height) * 2 + 1);
+        ray.setFromCamera(ndc, this.camera);
+        for (const h of ray.intersectObject(this.world.root, true)) {
+          const o = h.object; if (SKIP.has(o.userData.sys) || !seen(o) || o.isLine) continue;
+          if (o.userData.itemId) { item = this.world.item(o.userData.itemId); found = item && TIPS[item.type]; }
+          else for (let p = o; p && !found; p = p.parent) found = p.userData.tip;
+          break;                                     // 맨 앞에 보이는 것만 본다
+        }
+        if (found) { const [name, desc] = found.split('|'); tip.innerHTML = '<b></b><span></span>'; tip.firstChild.textContent = name; tip.lastChild.textContent = desc || '';
+          const x = hoverXY[0] - b.left, y = hoverXY[1] - b.top; tip.style.left = Math.min(Math.max(8, x + 14), b.width - 250) + 'px'; tip.style.top = Math.max(8, y - 54) + 'px'; }
+      }
+      tip.classList.toggle('hidden', !found); dom.style.cursor = found ? 'help' : '';
+      if (this.world.root) this.world.highlight(null, item);
+    };
     const dom = r.domElement; let last = null; const ptrs = new Map(); let pinch = 0;
+    dom.addEventListener('pointermove', (e) => { hoverXY = [e.clientX, e.clientY]; hoverDirty = true; });
+    dom.addEventListener('pointerleave', () => { hoverXY = null; hoverDirty = true; });
     dom.addEventListener('pointerdown', (e) => { try { dom.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ } ptrs.set(e.pointerId, [e.clientX, e.clientY]); last = [e.clientX, e.clientY]; this.auto = false; });
     dom.addEventListener('pointermove', (e) => {
       if (!ptrs.has(e.pointerId)) return; ptrs.set(e.pointerId, [e.clientX, e.clientY]);
@@ -185,7 +223,10 @@ export class Viewer {
       this.camera.lookAt(this.center.x, this.lookY, this.center.z);
       if (this.view === 'hall' && this.world.root) this.world.update(dt, clock.elapsedTime);
       if (this.view === 'site' && this.site) this.site.tick(dt, clock.elapsedTime);
-      r.render(scene, this.camera); requestAnimationFrame(loop);
+      if (hoverDirty) this.pick();
+      r.render(scene, this.camera);
+      if (this.view === 'hall' && this.mode === 'heat' && this.world.overlayScene.children.length) { r.autoClear = false; r.render(this.world.overlayScene, this.camera); r.autoClear = true; }      // 열화상 위에 공기 화살표
+      requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
   }

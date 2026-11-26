@@ -232,11 +232,13 @@ export function buildExtras(world, level, kit) {
       const hw = (q ? D : W) / 2, hd = (q ? W : D) / 2;
       world.colliders.push({ minX: x - hw, maxX: x + hw, minZ: z - hd, maxZ: z + hd, y0: 0, y1: H });
     }
+    const liq = ['hgx', 'nvl72', 'dlc'].includes(f.variant);
+    body.userData.tip = face.userData.tip = led.userData.tip = liq ? '서버 랙 (액체 냉각)|서버를 층층이 꽂는 캐비닛. 뜨거운 칩은 냉각수로 직접 식힙니다' : '서버 랙|서버를 층층이 꽂는 캐비닛. 앞에서 찬 공기를 빨아들여 뒤로 더운 공기를 내보냅니다';
     root.add(body, face, led);
     if (['hgx', 'nvl72', 'dlc'].includes(f.variant)) {
       // 랙 뒤 세로 매니폴드 (공급 파랑, 환수 빨강)
       const geo = new THREE.CylinderGeometry(0.045, 0.045, H - 0.3, 10);
-      const ms = new THREE.InstancedMesh(geo, kit.pipeS, n), mr = new THREE.InstancedMesh(geo, kit.pipeR, n); ms.userData.sys = mr.userData.sys = 'pipe';
+      const ms = new THREE.InstancedMesh(geo, kit.pipeS, n), mr = new THREE.InstancedMesh(geo, kit.pipeR, n); ms.userData.sys = mr.userData.sys = 'pipe'; ms.userData.tip = mr.userData.tip = '랙 매니폴드|냉각수를 서버마다 나눠 주고 다시 모으는 세로 배관';
       for (let i = 0; i < n; i++) {
         const x = f.x + i * (f.dx || 0), z = f.z + i * (f.dz || 0), c = Math.cos(ry), sn = Math.sin(ry);
         for (const [mesh, lx] of [[ms, -W / 2 + 0.1], [mr, W / 2 - 0.1]]) { const lz = -D / 2 - 0.07; o.rotation.set(0, 0, 0); o.position.set(x + lx * c + lz * sn, H / 2 + 0.05, z - lx * sn + lz * c); o.updateMatrix(); mesh.setMatrixAt(i, o.matrix); }
@@ -258,7 +260,7 @@ export function buildExtras(world, level, kit) {
     const geo = new THREE.CylinderGeometry(0.03, 0.03, 0.8, 8);
     for (const ret of [false, true]) {
       const list = level.risers.filter((r) => !!r.ret === ret); if (!list.length) continue;
-      const im = new THREE.InstancedMesh(geo, ret ? kit.pipeR : kit.pipeS, list.length); im.userData.sys = 'pipe';
+      const im = new THREE.InstancedMesh(geo, ret ? kit.pipeR : kit.pipeS, list.length); im.userData.sys = 'pipe'; im.userData.tip = '수직 배관|바닥 아래 주배관에서 랙으로 올라가는 관';
       list.forEach((r, i) => { MAT.makeTranslation(r.x, -0.05, r.z); im.setMatrixAt(i, MAT); }); root.add(im);
     }
   }
@@ -270,6 +272,7 @@ export function buildExtras(world, level, kit) {
   for (const t of level.trays || []) for (let i = 0; i < t.pts.length - 1; i++) {
     const a = t.pts[i], b = t.pts[i + 1]; const [g, len] = seg(a, b); if (len < 0.05) continue;
     const vertical = Math.abs(a[1] - b[1]) > 0.2;
+    g.userData.tip = t.kind === 'data' ? '광케이블 덕트|서버끼리 데이터를 주고받는 광케이블이 지나는 통로' : '전력 케이블 트레이|전기 케이블을 얹어 나르는 사다리 모양 선반';
     if (t.kind === 'data') {
       // 광케이블 덕트(노란색 트로프)
       const m = box(0.2, 0.1, len, fiberM, 0, 0, 0, 'struct'); m.castShadow = false; g.add(m);
@@ -289,6 +292,7 @@ export function buildExtras(world, level, kit) {
   for (const dct of level.ducts || []) for (let i = 0; i < dct.pts.length - 1; i++) {
     const a = dct.pts[i], b = dct.pts[i + 1]; const [g, len] = seg(a, b); if (len < 0.05) continue;
     const w = dct.w || 0.6, h = dct.h || 0.4;
+    g.userData.tip = '공조 덕트|공기를 실어 나르는 통로';
     const body = box(w, h, len, ductM, 0, 0, 0, 'struct'); g.add(body);
     for (let z = -len / 2; z <= len / 2 + 0.01; z += 1.2) { const f = box(w + 0.06, h + 0.06, 0.03, railM, 0, 0, z, 'struct'); f.castShadow = false; g.add(f); }        // 이음 플랜지
     if (Math.abs(a[1] - b[1]) < 0.2) for (let z = -len / 2 + 0.9; z < len / 2 - 0.3; z += 1.8) { const gr = box(w * 0.7, 0.02, 0.7, grilleM, 0, -h / 2 - 0.011, z, 'struct'); gr.castShadow = false; g.add(gr); }   // 흡입 그릴

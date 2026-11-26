@@ -121,8 +121,13 @@ body { font-size: 16.5px; }
 .viewer.max #view3d { flex: 1; height: auto; min-height: 0; }
 /* 열화상 범례, 통로 범례 */
 .thermal, .aislekey { position: absolute; z-index: 3; left: 12px; bottom: 92px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: rgba(10, 6, 22, .78); color: #fff; font-size: 12px; padding: 7px 12px; border-radius: 12px; pointer-events: none; }
-.thermal i { width: 150px; height: 10px; border-radius: 6px; background: linear-gradient(90deg, #08002a, #5c0094, #db145c, #ff7a0a, #ffe140, #fffff5); }
+.thermal i { width: 150px; height: 10px; border-radius: 6px; background: linear-gradient(90deg, #000d8c, #008cff, #00d98c, #f2eb1a, #ff8000, #e60d0d); }
 .thermal em { font-style: normal; opacity: .75; width: 100%; }
 .aislekey { background: rgba(255, 255, 255, .92); color: var(--ink); border: 1px solid var(--line); } .aislekey .c { color: #1f6fe5; } .aislekey .h { color: #e0431c; }
 .hidden { display: none !important; }
 @media (max-width: 900px) { .split { grid-template-columns: 1fr; } #view3d { height: 40vh; } .stepnav .btn.primary { max-width: none; } .numrow input[type=number] { width: 120px; } .thermal, .aislekey { bottom: 110px; } }
+
+/* 3D 화면에서 커서를 올린 장치 이름 */
+.tip3d { position: absolute; z-index: 4; max-width: 240px; background: rgba(16, 24, 40, .92); color: #fff; border-radius: 10px; padding: 8px 11px; font-size: 12.5px; line-height: 1.45; pointer-events: none; box-shadow: 0 6px 18px rgba(0, 0, 0, .25); }
+.tip3d b { display: block; font-size: 13.5px; } .tip3d span { display: block; opacity: .85; } .tip3d.hidden { display: none; }
+#view3d { position: relative; }
